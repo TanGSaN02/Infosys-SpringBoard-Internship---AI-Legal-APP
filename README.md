@@ -18,38 +18,36 @@ This project provides a legal and risk analysis tool using Watson AI. It allows 
 - **requirements.txt**: The file containing all necessary dependencies to run the project.
 - **risk_analysis.xlsx**: Example dataset used in the project for testing purposes.
 
-## Requirements
 
-Before running the project, you need to install the necessary dependencies. You can install them by running:
-pip install -r requirements.txt
 How to Use the Project
-Clone the repository:
-
-First, clone the repository to your local machine:
+Step 1: Clone the Repository
+First, clone the repository to your local machine. Open your terminal and run:
 
 bash
 Copy
 Edit
-git clone https://github.com/your-username/your-repository-name.git
+git clone https://github.com/your-username/your-repository-name.git  
 cd your-repository-name
-Set up the environment:
-
-Install the required dependencies by running the following command:
+Step 2: Install Dependencies
+Install the required Python dependencies listed in the requirements.txt file. Run the following command:
 
 bash
 Copy
 Edit
 pip install -r requirements.txt
-Configure API keys:
+Step 3: Configure API Keys
+Watson AI API Configuration
+To use the Watson AI API, follow these steps:
 
-To use the Watson AI API, you need to configure your API key:
+Create an IBM Watson Account
 
-Go to IBM Watson AI and create a free account if you don't have one.
+Go to IBM Watson AI and create a free account if you don’t already have one.
+Generate an API Key
 
-Once you have an account, go to the "API Keys" section and generate an API key for the Watson AI service.
+Navigate to the "API Keys" section and generate an API key for the Watson AI service.
+Create a Configuration File
 
-Create a file named config.json in the root directory of the project with the following structure:
-
+In the root directory of your project, create a file named config.json with the following structure:
 json
 Copy
 Edit
@@ -57,25 +55,31 @@ Edit
     "API_KEY": "your-watson-api-key",
     "URL": "your-watson-api-url"
 }
-Replace your-watson-api-key with your actual Watson API key and your-watson-api-url with the API URL.
+Replace your-watson-api-key with your actual API key and your-watson-api-url with the Watson API URL.
 
-Google Sheets API Integration:
+Step 4: Google Sheets API Integration (Optional)
+Enable Google Sheets API
+If you want to use Google Sheets for data storage or retrieval, configure the Google Sheets API:
 
-If you want to use Google Sheets to store or fetch data in the project, you need to configure the Google Sheets API.
+Set Up a Google Cloud Project
 
 Go to the Google Developers Console.
+Create a project and enable the following APIs:
+Google Sheets API
+Google Drive API
+Download Credentials
 
-Create a project and enable the "Google Sheets API" and "Google Drive API".
-
-Download the credentials as a credentials.json file and place it in the root directory of the project.
-
-Use the gspread Python library to interact with Google Sheets. You can install it via:
+Download the credentials file as credentials.json.
+Place it in the root directory of the project.
+Install Required Libraries
+Install the gspread and oauth2client libraries by running:
 
 bash
 Copy
 Edit
 pip install gspread oauth2client
-Authenticate using the credentials file by running:
+Authenticate and Use Google Sheets
+Use the following Python code snippet to authenticate and interact with Google Sheets:
 
 python
 Copy
@@ -83,20 +87,22 @@ Edit
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
+# Define the scope
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+
+# Authenticate using the credentials file
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
-Now you can use the Google Sheets API to read and write data to/from your Google Sheets.
 
-Run the Streamlit app:
-
-To start the Streamlit application, run the following command:
+# Now you can read/write data from Google Sheets
+Step 5: Run the Streamlit App
+To start the Streamlit web application, run the following command in your terminal:
 
 bash
 Copy
 Edit
 streamlit run app.py
-This will start a web application in your browser where you can upload documents and receive risk analysis.
+This will launch the web application in your default browser. You can use it to upload documents and receive risk analysis.
 
 License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License. For details, refer to the LICENSE file.

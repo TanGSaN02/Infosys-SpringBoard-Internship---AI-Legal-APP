@@ -1,4 +1,4 @@
-# Legal Document Querying and Risk Analysis
+# AI-Legal Document Querying and Risk Analysis
 
 ## Project Overview
 

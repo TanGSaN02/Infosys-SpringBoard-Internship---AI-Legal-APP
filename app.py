@@ -147,7 +147,7 @@ def main():
         credentials_file = "alien-baton-446917-f0-a58499645f4c.json"
         sheet_name = st.text_input("📊 Enter Google Sheet name")
         email = "chsdv2004@gmail.com"
-        password = "fmxe kxdz koiy qzra"
+        password = "**** **** **** ****"
         recipient_email = st.text_input("📩 Enter recipient email")
 
         if st.button("Query Document"):

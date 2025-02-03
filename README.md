@@ -104,5 +104,11 @@ Edit
 streamlit run app.py
 This will launch the web application in your default browser. You can use it to upload documents and receive risk analysis.
 
+Output
+![image](https://github.com/user-attachments/assets/475a3dab-e53a-4ea4-993d-a4d36ce91216)
+![image](https://github.com/user-attachments/assets/98995bcc-b109-4327-a6be-3218d6ff4b02)
+
+
+
 License
 This project is licensed under the MIT License. For details, refer to the LICENSE file.

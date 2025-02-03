@@ -106,6 +106,7 @@ This will launch the web application in your default browser. You can use it to 
 
 # Output
 ![image](https://github.com/user-attachments/assets/475a3dab-e53a-4ea4-993d-a4d36ce91216)
+
 ![image](https://github.com/user-attachments/assets/98995bcc-b109-4327-a6be-3218d6ff4b02)
 
 

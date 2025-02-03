@@ -1,120 +1,173 @@
+%%writefile app.py
 import streamlit as st
-import json
-from transformers import pipeline
 import os
+import json
+import gspread
+import pandas as pd
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from oauth2client.service_account import ServiceAccountCredentials
+from transformers import pipeline
+from langchain.document_loaders import TextLoader
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import Chroma
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.chains import RetrievalQA
+from ibm_watsonx_ai.foundation_models import Model
+from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
+from ibm_watsonx_ai.foundation_models.utils.enums import DecodingMethods
+from ibm_watsonx_ai.foundation_models.extensions.langchain import WatsonxLLM
 
-background_image_url = "https://www.freepik.com/free-photos-vectors/black-website-background"
+def load_and_preprocess(file_path):
+    """Load and split a text document into 1000-character chunks."""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
 
-st.markdown(
-    f"""
-    <style>
-    .stApp {{
-        background-image: url({background_image_url});
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-    }}
-    .css-ffhzg2 {{
-        background-color: transparent;
-    }}
-    .stMarkdown, .stWrite, .stText, .stTitle, .stButton {{
-        color: white;
-    }}
-    .stTextInput input {{
-        color: white;
-        background-color: black;
-    }}
-    .stButton button {{
-        background-color: black;
-        color: white;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+    with open(file_path, 'r', encoding='utf-8') as file:
+        document = file.read()
 
-st.title("Risk Analysis Using Watson AI")
-st.write("Upload a document (txt, pdf, csv) for legal and risk analysis using Watson AI.")
+    chunks = [document[i:i+1000] for i in range(0, len(document), 1000)]
+    return chunks
 
-uploaded_file = st.file_uploader("Upload your file", type=["txt", "pdf", "csv"])
+def risk_detection(chunks):
+    """Analyze legal risks using an NLP model."""
+    model_name = "google/flan-t5-base"
+    nlp = pipeline("text2text-generation", model=model_name)
 
-if uploaded_file is not None:
-    st.write(f"File uploaded: {uploaded_file.name}")
-    
-    file_content = uploaded_file.read().decode("utf-8")
-    
-    st.write("Document preview (first 1000 characters):")
-    st.text(file_content[:1000])
+    results = []
+    for chunk in chunks:
+        prompt_analysis = (
+            "Analyze the following text for legal risks, hidden obligations, or compliance issues:\n\n"
+            + chunk
+        )
+        analysis_result = nlp(prompt_analysis, max_length=200, do_sample=False)
+        analysis_text = analysis_result[0]['generated_text']
 
-    def risk_detection(chunks):
-        model_name = "google/flan-t5-base"
-        nlp = pipeline("text2text-generation", model=model_name)
+        prompt_recommendations = (
+            "Provide recommendations to mitigate identified risks in the following text:\n\n"
+            + chunk
+        )
+        recommendations_result = nlp(prompt_recommendations, max_length=200, do_sample=False)
+        recommendations_text = recommendations_result[0]['generated_text']
 
-        results = []
-        for chunk in chunks:
-            prompt = (
-                """You are a legal and risk analysis expert. Analyze the following text and provide a detailed report with:
-                Analysis: Identify at least two specific risks, hidden obligations, or dependencies in the text. Explain their nature, implications, and any underlying issues requiring attention. Focus on legal, financial, operational, or compliance aspects for the given below context."""
-                + chunk
-            )
-            result = nlp(prompt, max_length=200, do_sample=False)
-            results.append({"context": chunk, "analysis": result[0]['generated_text']})
+        results.append({
+            "context": chunk,
+            "analysis": analysis_text,
+            "recommendations": recommendations_text
+        })
+    return results
 
-            prompt = (
-                """You are a legal and risk analysis expert. Analyze the following text and provide a detailed report with:
-                Recommendations: Provide at least two clear and practical recommendations to address the identified risks, fulfill obligations, or manage dependencies. Ensure the recommendations are actionable, relevant, and include specific steps or strategies for resolution for the given below context and if there are no recommendations, state that no recommendations are possible for the given context."""
-                + chunk
-            )
-            result = nlp(prompt, max_length=200, do_sample=False)
-            results.append({"recommendations": result[0]['generated_text']})
+def export_to_sheets(data, sheet_name, credentials_file):
+    """Export analysis results to Google Sheets."""
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
+    client = gspread.authorize(creds)
 
-        return results
+    spreadsheet = client.create(sheet_name)
+    sheet = spreadsheet.sheet1
 
-    chunks = [file_content[i:i+1000] for i in range(0, len(file_content), 1000)]
-    analysis_results = risk_detection(chunks)
-    
-    st.write("Risk Analysis Results:")
-    for result in analysis_results:
-        if "context" in result:
-            st.write(f"**Context:**\n{result['context']}")
-        if "analysis" in result:
-            st.write(f"**Analysis:**\n{result['analysis']}")
-        if "recommendations" in result:
-            st.write(f"**Recommendations:**\n{result['recommendations']}")
+    df = pd.DataFrame(data)
+    sheet.update([df.columns.values.tolist()] + df.values.tolist())
 
-    email = "tonystark1696969@gmail.com"
-    password = "lsut uhmh ilch sibt"
-    recipient_email = "ambarish.singh22@vit.edu"
+    return spreadsheet.url
 
-    def send_email(subject, body):
-        message = MIMEMultipart()
-        message['From'] = email
-        message['To'] = recipient_email
-        message['Subject'] = subject
-        message.attach(MIMEText(body, 'plain'))
+def process_and_query(file_path, query, credentials_file, sheet_name):
+    """Run document analysis, query Watson AI, and save results."""
+    chunks = load_and_preprocess(file_path)
 
-        try:
-            with smtplib.SMTP('smtp.gmail.com', 587) as server:
-                server.set_debuglevel(1)
-                server.starttls()
-                server.login(email, password)
-                server.send_message(message)
-                st.write("Email sent successfully!")
-        except Exception as e:
-            st.write(f"Failed to send email: {e}")
+    loader = TextLoader(file_path)
+    documents = loader.load()
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    texts = text_splitter.split_documents(documents)
+    embeddings = HuggingFaceEmbeddings()
+    docsearch = Chroma.from_documents(texts, embeddings)
 
-    email_subject = "Risk Analysis Results"
-    email_body = "Here are the results of the risk analysis you requested:\n\n"
+    credentials = {
+        "url": "https://eu-de.ml.cloud.ibm.com",
+        "apikey": "ygkx3537EypWqZ6ziVsZe_2TWa52ha7nSiCdRJAfXMBu"
+    }
+    project_id = "4ec8c16d-4406-4dd2-92da-41d1718164ff"
 
-    for result in analysis_results:
-        if "context" in result:
-            email_body += f"**Context:**\n{result['context']}\n"
-        if "analysis" in result:
-            email_body += f"**Analysis:**\n{result['analysis']}\n"
-        if "recommendations" in result:
-            email_body += f"**Recommendations:**\n{result['recommendations']}\n"
+    model_id = 'google/flan-ul2'
+    parameters = {
+        GenParams.DECODING_METHOD: DecodingMethods.GREEDY,
+        GenParams.MIN_NEW_TOKENS: 50,
+        GenParams.MAX_NEW_TOKENS: 200,
+        GenParams.TEMPERATURE: 0.5
+    }
+    model = Model(model_id=model_id, params=parameters, credentials=credentials, project_id=project_id)
+    flan_ul2_llm = WatsonxLLM(model=model)
 
-    send_email(email_subject, email_body)
+    qa = RetrievalQA.from_chain_type(
+        llm=flan_ul2_llm,
+        chain_type="stuff",
+        retriever=docsearch.as_retriever(),
+        return_source_documents=False
+    )
+
+    result = qa.invoke(query)
+    analysis = risk_detection(chunks)
+
+    output_path = "risk_analysis.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(analysis, f, ensure_ascii=False, indent=4)
+
+    sheet_url = export_to_sheets(analysis, sheet_name, credentials_file)
+    return result, analysis, sheet_url
+
+def send_email(email, password, recipient_email, subject, body):
+    """Send an email with analysis results."""
+    message = MIMEMultipart()
+    message['From'] = email
+    message['To'] = recipient_email
+    message['Subject'] = subject
+    message.attach(MIMEText(body, 'plain'))
+
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(email, password)
+            server.send_message(message)
+            st.success("✅ Email sent successfully!")
+    except Exception as e:
+        st.error(f"❌ Failed to send email: {e}")
+
+def main():
+    st.title("🚀 Legal and Risk Analysis Tool")
+
+    uploaded_file = st.file_uploader("📂 Upload a text file")
+
+    if uploaded_file is not None:
+        file_path = os.path.join("/tmp", uploaded_file.name)
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        query = st.text_input("🔍 Enter your query")
+        credentials_file = "alien-baton-446917-f0-a58499645f4c.json"
+        sheet_name = st.text_input("📊 Enter Google Sheet name")
+        email = "chsdv2004@gmail.com"
+        password = "fmxe kxdz koiy qzra"
+        recipient_email = st.text_input("📩 Enter recipient email")
+
+        if st.button("Query Document"):
+            if query and file_path:
+                result, _, _ = process_and_query(file_path, query, credentials_file, sheet_name)
+                st.write("✅ Query Result:", result)
+            else:
+                st.error("Please provide a valid query and upload a document.")
+
+        if st.button("Analyze and Send Email"):
+            if file_path and credentials_file and sheet_name and email and password and recipient_email:
+                _, analysis, sheet_url = process_and_query(file_path, query, credentials_file, sheet_name)
+                st.write("✅ Google Sheets URL:", sheet_url)
+                st.json(analysis)
+
+                subject = "Legal and Risk Analysis Results"
+                body = f"Here are the results of the legal and risk analysis:\n\nGoogle Sheets URL: {sheet_url}\n\nAnalysis Results: {json.dumps(analysis, indent=4)}"
+                send_email(email, password, recipient_email, subject, body)
+            else:
+                st.error("Please provide all required inputs.")
+
+if _name_ == "_main_":
+    main()
